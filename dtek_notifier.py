@@ -1,40 +1,17 @@
 import asyncio
 import os
-import json
 import urllib.request
 import urllib.parse
 from playwright.async_api import async_playwright
 
 BOT_TOKEN = os.environ["BOT_TOKEN"].strip()
-# Фіксована адреса для Фастова
+CHAT_ID = "917066893"
+
 MY_CITY = "Фастів"
 MY_STREET = "Садовий"
 MY_HOUSE = "10"
-DTEK_URL = "https://www.dtek-krem.com.ua/ua/shutdowns" # Сайт для Київської області
-STATE_FILE = "last_chat.json"
+DTEK_URL = "https://www.dtek-krem.com.ua/ua/shutdowns"
 SCREENSHOT_FILE = "schedule.png"
-
-
-def get_latest_chat_id() -> str:
-    if os.path.exists(STATE_FILE):
-        with open(STATE_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            if data.get("chat_id"):
-                return str(data["chat_id"])
-
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
-    with urllib.request.urlopen(url, timeout=15) as resp:
-        res = json.loads(resp.read().decode("utf-8"))
-
-    for item in reversed(res.get("result", [])):
-        msg = item.get("message") or item.get("callback_query", {}).get("message")
-        if msg and "chat" in msg:
-            chat_id = str(msg["chat"]["id"])
-            with open(STATE_FILE, "w", encoding="utf-8") as f:
-                json.dump({"chat_id": chat_id}, f)
-            return chat_id
-            
-    raise RuntimeError("Напишіть будь-яке повідомлення або /start своєму боту в Telegram!")
 
 
 def send_telegram_photo(chat_id: str, photo_path: str, caption: str):
@@ -76,7 +53,6 @@ async def fetch_schedule_screenshot():
         page = await context.new_page()
         await page.goto(DTEK_URL, wait_until="domcontentloaded", timeout=60000)
 
-        # Закриваємо модальні вікна/куки, якщо є
         try:
             close_btn = page.locator(".modal__close, button.close, .cookie-accept")
             if await close_btn.count() > 0:
@@ -84,7 +60,7 @@ async def fetch_schedule_screenshot():
         except:
             pass
 
-        # 1. Заповнюємо населений пункт (для ДТЕК Київські регіональні мережі)
+        # 1. Заповнюємо місто
         try:
             city_input = page.locator("#city")
             if await city_input.count() > 0 and await city_input.is_visible():
@@ -114,19 +90,18 @@ async def fetch_schedule_screenshot():
 
 
 async def main():
-    chat_id = get_latest_chat_id()
     print("Шукаємо графік для м. Фастів, пров. Садовий, 10...")
     
     try:
         await fetch_schedule_screenshot()
         caption = "🏠 <b>Адреса:</b> м. Фастів, пров. Садовий, 10\n⚡ <i>Графік відключень:</i>"
-        send_telegram_photo(chat_id, SCREENSHOT_FILE, caption)
+        send_telegram_photo(CHAT_ID, SCREENSHOT_FILE, caption)
         print("Скріншот успішно надіслано!")
     except Exception as e:
         print(f"Помилка: {e}")
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         data = urllib.parse.urlencode({
-            "chat_id": chat_id,
+            "chat_id": CHAT_ID,
             "text": f"❌ Не вдалося знайти графік за адресою (м. Фастів, пров. Садовий, 10).\nПомилка: <code>{e}</code>",
             "parse_mode": "HTML"
         }).encode("utf-8")
