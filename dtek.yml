@@ -1,0 +1,31 @@
+name: DTEK Fastiv Checker
+
+on:
+  workflow_dispatch: # Запуск однією кнопкою
+
+permissions:
+  contents: write
+
+jobs:
+  check_address:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Завантаження коду
+        uses: actions/checkout@v4
+
+      - name: Встановлення Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Встановлення Playwright та Chromium
+        run: |
+          pip install playwright
+          playwright install --with-deps chromium
+
+      - name: Запуск скрипта
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        run: python dtek_notifier.py
